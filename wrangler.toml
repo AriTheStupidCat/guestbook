@@ -2,7 +2,7 @@ name = "guestbook"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
-account_id = "f87ee4b9600f437b8da1104d077418c3"
+account_id = "ec8317dc0a03c714494bacc318c0adad"
 
 [[kv_namespaces]]
 binding = "GUESTBOOK"
@@ -10,7 +10,7 @@ id = "8d0d1096e83d41af991fabc66649cec2"
 preview_id = "25993eecb9d74bed8f6c9ddefc4af91c"
 
 [vars]
-ALLOWED_ORIGIN = "https://c.stupid.cat"
+ALLOWED_ORIGIN = "https://a.stupid.cat"
 
 # TURNSTILE_SECRET is NOT set here — store it as a secret instead:
 #   pnpx wrangler secret put TURNSTILE_SECRET
