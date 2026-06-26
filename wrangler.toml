@@ -6,7 +6,7 @@ account_id = "ec8317dc0a03c714494bacc318c0adad"
 
 [[kv_namespaces]]
 binding = "GUESTBOOK"
-id = "8d0d1096e83d41af991fabc66649cec2"
+id = "5c5565871ff94c5d99ddab56a7a92ad2"
 preview_id = "25993eecb9d74bed8f6c9ddefc4af91c"
 
 [vars]
