@@ -10,7 +10,7 @@ id = "5c5565871ff94c5d99ddab56a7a92ad2"
 preview_id = "25993eecb9d74bed8f6c9ddefc4af91c"
 
 [vars]
-ALLOWED_ORIGIN = ["https://a.stupid.cat", "https://ari.is-a.dev"]
+ALLOWED_ORIGIN = "https://a.stupid.cat"
 
 # TURNSTILE_SECRET is NOT set here — store it as a secret instead:
 #   pnpx wrangler secret put TURNSTILE_SECRET
