@@ -1,9 +1,6 @@
 export interface Env {
-  /** KV namespace holding the guestbook entries + rate-limit keys. */
   GUESTBOOK: KVNamespace;
-  /** Origin allowed to call the API (CORS). Defaults to "*". */
-  ALLOWED_ORIGIN?: string;
-  /** Turnstile secret key. When unset, the captcha check is skipped. */
+  ALLOWED_ORIGINS?: string;
   TURNSTILE_SECRET?: string;
 }
 
@@ -34,8 +31,17 @@ const LIMITS = {
   website: 200,
 } as const;
 
-function corsHeaders(env: Env): Record<string, string> {
-  const origin = env.ALLOWED_ORIGIN || "*";
+function corsHeaders(request: Request, env: Env): Record<string, string> {
+  const requestOrigin = request.headers.get("Origin") ?? "";
+
+  const allowedOrigins =
+    env.ALLOWED_ORIGINS?.split(",").map(o => o.trim()) ?? ["*"];
+
+  const origin =
+    allowedOrigins.includes(requestOrigin) || allowedOrigins.includes("*")
+      ? requestOrigin
+      : allowedOrigins[0];
+
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -44,13 +50,18 @@ function corsHeaders(env: Env): Record<string, string> {
   };
 }
 
-function json(data: unknown, status: number, env: Env): Response {
+function json(
+  data: unknown,
+  status: number,
+  request: Request,
+  env: Env
+): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
-      ...corsHeaders(env),
+      ...corsHeaders(request, env),
     },
   });
 }
