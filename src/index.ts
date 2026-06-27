@@ -31,23 +31,37 @@ const LIMITS = {
   website: 200,
 } as const;
 
+// Supports any number of allowed origins, e.g.
+// ALLOWED_ORIGINS = "https://example.com,https://www.example.com,https://staging.example.com"
 function corsHeaders(request: Request, env: Env): Record<string, string> {
   const requestOrigin = request.headers.get("Origin") ?? "";
 
   const allowedOrigins =
-    env.ALLOWED_ORIGINS?.split(",").map(o => o.trim()) ?? ["*"];
+    env.ALLOWED_ORIGINS?.split(",")
+      .map(o => o.trim())
+      .filter(Boolean) ?? ["*"];
 
+  const wildcard = allowedOrigins.includes("*");
   const origin =
-    allowedOrigins.includes(requestOrigin) || allowedOrigins.includes("*")
-      ? requestOrigin
+    wildcard || allowedOrigins.includes(requestOrigin)
+      ? requestOrigin || (wildcard ? "*" : allowedOrigins[0])
       : allowedOrigins[0];
 
-  return {
-    "Access-Control-Allow-Origin": origin,
+  const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
+    "Access-Control-Allow-Origin": origin,
   };
+
+  // When echoing a specific origin (not "*"), tell caches the response
+  // varies by Origin so one origin's CORS headers don't get cached/served
+  // to another origin.
+  if (origin !== "*") {
+    headers["Vary"] = "Origin";
+  }
+
+  return headers;
 }
 
 function json(
@@ -126,7 +140,7 @@ async function readEntries(env: Env): Promise<GuestbookEntry[]> {
   }
 }
 
-async function handleGet(url: URL, env: Env): Promise<Response> {
+async function handleGet(url: URL, request: Request, env: Env): Promise<Response> {
   const entries = await readEntries(env);
   const limit = Math.min(
     Math.max(parseInt(url.searchParams.get("limit") || "") || 50, 1),
@@ -141,6 +155,7 @@ async function handleGet(url: URL, env: Env): Promise<Response> {
       offset,
     },
     200,
+    request,
     env
   );
 }
@@ -152,12 +167,12 @@ async function handlePost(request: Request, env: Env): Promise<Response> {
   try {
     body = (await request.json()) as PostBody;
   } catch {
-    return json({ error: "Invalid JSON body." }, 400, env);
+    return json({ error: "Invalid JSON body." }, 400, request, env);
   }
 
   // Honeypot: real users never fill this hidden field.
   if (clean(body.url2 ?? "", 100)) {
-    return json({ ok: true, skipped: true }, 200, env); // pretend success
+    return json({ ok: true, skipped: true }, 200, request, env); // pretend success
   }
 
   // Turnstile (only enforced if a secret is configured)
@@ -167,15 +182,15 @@ async function handlePost(request: Request, env: Env): Promise<Response> {
     env
   );
   if (!turnstileOk) {
-    return json({ error: "Captcha verification failed. Please try again." }, 403, env);
+    return json({ error: "Captcha verification failed. Please try again." }, 403, request, env);
   }
 
   const name = clean(body.name, LIMITS.name);
   const message = clean(body.message, LIMITS.message);
   const website = cleanWebsite(body.website);
 
-  if (!name) return json({ error: "Please enter a name." }, 400, env);
-  if (!message) return json({ error: "Please enter a message." }, 400, env);
+  if (!name) return json({ error: "Please enter a name." }, 400, request, env);
+  if (!message) return json({ error: "Please enter a message." }, 400, request, env);
 
   // Rate limit per IP
   if (ip) {
@@ -185,6 +200,7 @@ async function handlePost(request: Request, env: Env): Promise<Response> {
       return json(
         { error: `Slow down a moment — you can post again in ~${RATE_LIMIT_SECONDS}s.` },
         429,
+        request,
         env
       );
     }
@@ -204,7 +220,7 @@ async function handlePost(request: Request, env: Env): Promise<Response> {
   if (entries.length > MAX_ENTRIES) entries.length = MAX_ENTRIES;
   await env.GUESTBOOK.put(ENTRIES_KEY, JSON.stringify(entries));
 
-  return json({ ok: true, entry }, 201, env);
+  return json({ ok: true, entry }, 201, request, env);
 }
 
 export default {
@@ -213,20 +229,23 @@ export default {
       const url = new URL(request.url);
 
       if (request.method === "OPTIONS") {
-        return new Response(null, { status: 204, headers: corsHeaders(env) });
+        return new Response(null, {
+          status: 204,
+          headers: corsHeaders(request, env),
+        });
       }
       if (request.method === "GET") {
-        return await handleGet(url, env);
+        return await handleGet(url, request, env);
       }
       if (request.method === "POST") {
         return await handlePost(request, env);
       }
-      return json({ error: "Method not allowed." }, 405, env);
+      return json({ error: "Method not allowed." }, 405, request, env);
     } catch (err) {
       // Always attach CORS headers, even on unexpected errors, so the browser
       // surfaces a real message instead of a masked CORS/network error.
       console.error("[guestbook] unhandled error", err);
-      return json({ error: "Internal error." }, 500, env);
+      return json({ error: "Internal error." }, 500, request, env);
     }
   },
 } satisfies ExportedHandler<Env>;
